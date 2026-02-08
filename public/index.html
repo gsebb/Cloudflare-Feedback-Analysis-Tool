@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback Aggregator Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>📊 Feedback Aggregator</h1>
+            <p class="subtitle">AI-powered feedback analysis and insights</p>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">💬</div>
+                <div class="stat-content">
+                    <div class="stat-label">Total Feedback</div>
+                    <div class="stat-value" id="total-count">0</div>
+                </div>
+            </div>
+            <div class="stat-card positive">
+                <div class="stat-icon">😊</div>
+                <div class="stat-content">
+                    <div class="stat-label">Positive</div>
+                    <div class="stat-value" id="positive-count">0</div>
+                    <div class="stat-percentage" id="positive-percent">0%</div>
+                </div>
+            </div>
+            <div class="stat-card negative">
+                <div class="stat-icon">😞</div>
+                <div class="stat-content">
+                    <div class="stat-label">Negative</div>
+                    <div class="stat-value" id="negative-count">0</div>
+                    <div class="stat-percentage" id="negative-percent">0%</div>
+                </div>
+            </div>
+            <div class="stat-card neutral">
+                <div class="stat-icon">😐</div>
+                <div class="stat-content">
+                    <div class="stat-label">Neutral</div>
+                    <div class="stat-value" id="neutral-count">0</div>
+                    <div class="stat-percentage" id="neutral-percent">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>Sentiment Distribution</h3>
+                <canvas id="sentimentChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Top Categories</h3>
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Actions Bar -->
+        <div class="actions-bar">
+            <button class="btn btn-primary" onclick="openSubmitModal()">
+                ✍️ Submit Feedback
+            </button>
+            <button class="btn btn-secondary" onclick="generateMockData()">
+                🎲 Generate Mock Data
+            </button>
+            <button class="btn btn-secondary" onclick="refreshDashboard()">
+                🔄 Refresh
+            </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <select id="sentiment-filter" onchange="applyFilters()">
+                <option value="">All Sentiments</option>
+                <option value="positive">Positive</option>
+                <option value="negative">Negative</option>
+                <option value="neutral">Neutral</option>
+            </select>
+            <select id="category-filter" onchange="applyFilters()">
+                <option value="">All Categories</option>
+                <option value="bug">Bug</option>
+                <option value="feature">Feature</option>
+                <option value="ui">UI/UX</option>
+                <option value="performance">Performance</option>
+                <option value="support">Support</option>
+                <option value="pricing">Pricing</option>
+                <option value="general">General</option>
+            </select>
+        </div>
+
+        <!-- Feedback List -->
+        <div class="feedback-section">
+            <h2>Recent Feedback</h2>
+            <div id="feedback-list" class="feedback-list">
+                <div class="loading">Loading feedback...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submit Feedback Modal -->
+    <div id="submit-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Submit New Feedback</h2>
+                <button class="close-btn" onclick="closeSubmitModal()">&times;</button>
+            </div>
+            <form id="submit-form" onsubmit="submitFeedback(event)">
+                <div class="form-group">
+                    <label for="feedback-text">Feedback Message</label>
+                    <textarea
+                        id="feedback-text"
+                        rows="4"
+                        placeholder="Share your thoughts..."
+                        required
+                    ></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="feedback-source">Source</label>
+                    <select id="feedback-source">
+                        <option value="email">Email</option>
+                        <option value="survey">Survey</option>
+                        <option value="chat">Chat</option>
+                        <option value="support">Support</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeSubmitModal()">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Submit Feedback
+                    </button>
+                </div>
+            </form>
+            <div id="submit-result" class="submit-result"></div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

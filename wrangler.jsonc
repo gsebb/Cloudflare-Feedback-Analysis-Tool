@@ -1,0 +1,36 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "feedback-aggregator",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-02-05",
+	"observability": {
+		"enabled": true
+	},
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	/**
+	 * Bindings
+	 */
+	// Workers AI binding for sentiment analysis and categorization
+	"ai": {
+		"binding": "AI"
+	},
+	// D1 database binding for storing feedback entries
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "feedback-db",
+			"database_id": "e83bb14c-65a3-4a99-bba7-07d049b7ba49"
+		}
+	],
+	// Static assets for serving the dashboard
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS"
+	}
+}
