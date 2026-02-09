@@ -16,7 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
 async function initDashboard() {
     await Promise.all([
         loadStats(),
-        loadFeedback()
+        loadFeedback(),
+        loadInsights()
     ]);
 }
 
@@ -395,5 +396,180 @@ document.getElementById('submit-modal')?.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeSubmitModal();
+        closeClearModal();
     }
 });
+
+// Clear Feedback Modal Functions
+function openClearModal() {
+    document.getElementById('clear-modal').classList.add('active');
+    document.getElementById('clear-result').className = 'submit-result';
+    document.getElementById('clear-result').textContent = '';
+}
+
+function closeClearModal() {
+    document.getElementById('clear-modal').classList.remove('active');
+    document.querySelector('input[name="clear-option"][value="all"]').checked = true;
+    document.getElementById('clear-result').className = 'submit-result';
+    document.getElementById('clear-result').textContent = '';
+}
+
+async function confirmClearFeedback() {
+    const selectedOption = document.querySelector('input[name="clear-option"]:checked').value;
+    const clearResult = document.getElementById('clear-result');
+
+    // Build API URL based on selected option
+    let url = '/api/feedback/clear?';
+    let confirmMessage = '';
+
+    switch (selectedOption) {
+        case 'all':
+            url += 'all=true';
+            confirmMessage = 'Are you sure you want to delete ALL feedback? This cannot be undone!';
+            break;
+        case 'old':
+            const days = document.getElementById('days-old').value;
+            url += `olderThan=${days}`;
+            confirmMessage = `Delete all feedback older than ${days} days?`;
+            break;
+        case 'sentiment':
+            const sentiment = document.getElementById('clear-sentiment').value;
+            url += `sentiment=${sentiment}`;
+            confirmMessage = `Delete all ${sentiment} feedback?`;
+            break;
+        case 'category':
+            const category = document.getElementById('clear-category').value;
+            url += `category=${category}`;
+            confirmMessage = `Delete all feedback in category "${category}"?`;
+            break;
+    }
+
+    // Confirm before deleting
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
+    // Disable button and show loading
+    const deleteBtn = event.target;
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = '⏳ Deleting...';
+    clearResult.className = 'submit-result';
+
+    try {
+        const response = await fetch(url, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            clearResult.className = 'submit-result success';
+            clearResult.innerHTML = `
+                <strong>✅ Success!</strong><br>
+                ${data.message}<br>
+                Deleted: ${data.deleted} entries
+            `;
+
+            // Refresh dashboard after 1.5 seconds
+            setTimeout(() => {
+                closeClearModal();
+                initDashboard();
+                showToast(`${data.deleted} entries deleted`, 'success');
+            }, 1500);
+        } else {
+            clearResult.className = 'submit-result error';
+            clearResult.textContent = '❌ ' + (data.error || 'Failed to delete feedback');
+        }
+    } catch (error) {
+        console.error('Error clearing feedback:', error);
+        clearResult.className = 'submit-result error';
+        clearResult.textContent = '❌ Failed to delete feedback';
+    } finally {
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = 'Delete Feedback';
+    }
+}
+
+// Close clear modal on background click
+document.getElementById('clear-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'clear-modal') {
+        closeClearModal();
+    }
+});
+
+// Load and display insights
+async function loadInsights() {
+    const insightsContainer = document.getElementById('insights-container');
+    insightsContainer.innerHTML = '<div class="loading">Analyzing feedback...</div>';
+
+    try {
+        const response = await fetch('/api/insights');
+        const data = await response.json();
+
+        if (data.success) {
+            renderInsights(data.insights, data.totalAnalyzed);
+        }
+    } catch (error) {
+        console.error('Error loading insights:', error);
+        insightsContainer.innerHTML = '<div class="insights-empty">Failed to load insights</div>';
+    }
+}
+
+// Render insights to the page
+function renderInsights(insights, totalAnalyzed) {
+    const insightsContainer = document.getElementById('insights-container');
+
+    if (!insights || insights.length === 0) {
+        insightsContainer.innerHTML = `
+            <div class="insights-empty">
+                <div class="insights-empty-icon">✨</div>
+                <p>No negative feedback to analyze yet!</p>
+                <p style="font-size: 0.9rem; margin-top: 0.5rem;">Insights will appear here when negative feedback is received.</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Flatten all themes with their categories
+    const allThemes = [];
+    insights.forEach(insight => {
+        insight.themes.forEach(theme => {
+            allThemes.push({
+                ...theme,
+                category: insight.category
+            });
+        });
+    });
+
+    // Sort by count and take top 5
+    allThemes.sort((a, b) => b.count - a.count);
+    const topThemes = allThemes.slice(0, 5);
+
+    insightsContainer.innerHTML = `
+        <div class="insights-list">
+            ${topThemes.map(theme => `
+                <div class="insight-item">
+                    <div class="insight-item-header">
+                        <span class="insight-category-tag">${escapeHtml(theme.category)}</span>
+                        <span class="insight-item-title">${escapeHtml(theme.name)}</span>
+                        <span class="insight-item-meta">
+                            <span class="insight-item-count">${theme.count}</span>
+                            <span class="insight-item-sep">•</span>
+                            <span class="insight-item-percentage">${theme.percentage}%</span>
+                        </span>
+                    </div>
+                    <div class="insight-item-keywords">
+                        ${theme.keywords.slice(0, 5).map(keyword =>
+                            `<span class="insight-keyword">${escapeHtml(keyword)}</span>`
+                        ).join('')}
+                    </div>
+                    ${theme.examples && theme.examples.length > 0 ? `
+                        <div class="insight-item-example">
+                            "${escapeHtml(theme.examples[0].text)}"
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
