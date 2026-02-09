@@ -5,7 +5,8 @@ let currentFilters = {
     category: ''
 };
 let sentimentChart = null;
-let categoryChart = null;
+let positiveCategoryChart = null;
+let negativeCategoryChart = null;
 
 // Initialize dashboard on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -43,21 +44,18 @@ function updateStatsCards(stats) {
     document.getElementById('total-count').textContent = total;
 
     // Initialize sentiment counts
-    let positive = 0, negative = 0, neutral = 0;
+    let positive = 0, negative = 0;
 
     stats.sentiment.forEach(item => {
         if (item.sentiment === 'positive') {
             positive = item.count;
         } else if (item.sentiment === 'negative') {
             negative = item.count;
-        } else if (item.sentiment === 'neutral') {
-            neutral = item.count;
         }
     });
 
     document.getElementById('positive-count').textContent = positive;
     document.getElementById('negative-count').textContent = negative;
-    document.getElementById('neutral-count').textContent = neutral;
 
     // Calculate percentages
     if (total > 0) {
@@ -65,15 +63,14 @@ function updateStatsCards(stats) {
             `${Math.round((positive / total) * 100)}%`;
         document.getElementById('negative-percent').textContent =
             `${Math.round((negative / total) * 100)}%`;
-        document.getElementById('neutral-percent').textContent =
-            `${Math.round((neutral / total) * 100)}%`;
     }
 }
 
 // Update charts
 function updateCharts(stats) {
     updateSentimentChart(stats.sentiment);
-    updateCategoryChart(stats.categories);
+    updatePositiveCategoryChart(stats.positiveCategories);
+    updateNegativeCategoryChart(stats.negativeCategories);
 }
 
 // Sentiment chart
@@ -107,6 +104,7 @@ function updateSentimentChart(sentimentData) {
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            aspectRatio: 1.5,
             plugins: {
                 legend: {
                     position: 'bottom',
@@ -133,32 +131,33 @@ function updateSentimentChart(sentimentData) {
     });
 }
 
-// Category chart
-function updateCategoryChart(categoryData) {
-    const ctx = document.getElementById('categoryChart').getContext('2d');
+// Positive Category chart
+function updatePositiveCategoryChart(categoryData) {
+    const ctx = document.getElementById('positiveCategoryChart').getContext('2d');
 
     // Destroy existing chart
-    if (categoryChart) {
-        categoryChart.destroy();
+    if (positiveCategoryChart) {
+        positiveCategoryChart.destroy();
     }
 
     const labels = categoryData.map(item => capitalizeFirst(item.category));
     const data = categoryData.map(item => item.count);
 
-    categoryChart = new Chart(ctx, {
+    positiveCategoryChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
             datasets: [{
                 label: 'Count',
                 data: data,
-                backgroundColor: '#3b82f6',
+                backgroundColor: '#10b981',
                 borderRadius: 6
             }]
         },
         options: {
+            indexAxis: 'y',
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
                     display: false
@@ -166,13 +165,64 @@ function updateCategoryChart(categoryData) {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return `Count: ${context.parsed.y}`;
+                            return `Count: ${context.parsed.x}`;
                         }
                     }
                 }
             },
             scales: {
-                y: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Negative Category chart
+function updateNegativeCategoryChart(categoryData) {
+    const ctx = document.getElementById('negativeCategoryChart').getContext('2d');
+
+    // Destroy existing chart
+    if (negativeCategoryChart) {
+        negativeCategoryChart.destroy();
+    }
+
+    const labels = categoryData.map(item => capitalizeFirst(item.category));
+    const data = categoryData.map(item => item.count);
+
+    negativeCategoryChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Count',
+                data: data,
+                backgroundColor: '#ef4444',
+                borderRadius: 6
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Count: ${context.parsed.x}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
                     beginAtZero: true,
                     ticks: {
                         stepSize: 1
@@ -376,6 +426,10 @@ function showToast(message, type = 'info') {
 
 // Utility functions
 function capitalizeFirst(str) {
+    // Handle special cases for acronyms
+    if (str.toLowerCase() === 'ui') {
+        return 'UI/UX';
+    }
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 

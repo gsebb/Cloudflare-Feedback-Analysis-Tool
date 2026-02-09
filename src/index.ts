@@ -67,6 +67,10 @@ export default {
 				return await handleGetInsights(env, corsHeaders);
 			}
 
+			if (path === '/api/migrate-categories' && request.method === 'POST') {
+				return await handleMigrateCategories(env, corsHeaders);
+			}
+
 			// Serve static assets (dashboard)
 			return env.ASSETS.fetch(request);
 
@@ -212,10 +216,20 @@ async function handleGetStats(
 			 GROUP BY sentiment`
 		).all();
 
-		// Get category breakdown
-		const categoryStats = await env.DB.prepare(
+		// Get category breakdown for positive feedback
+		const positiveCategoryStats = await env.DB.prepare(
 			`SELECT category, COUNT(*) as count
 			 FROM feedback
+			 WHERE sentiment = 'positive'
+			 GROUP BY category
+			 ORDER BY count DESC`
+		).all();
+
+		// Get category breakdown for negative feedback
+		const negativeCategoryStats = await env.DB.prepare(
+			`SELECT category, COUNT(*) as count
+			 FROM feedback
+			 WHERE sentiment = 'negative'
 			 GROUP BY category
 			 ORDER BY count DESC`
 		).all();
@@ -241,7 +255,8 @@ async function handleGetStats(
 			stats: {
 				total: totalResult?.total || 0,
 				sentiment: sentimentStats.results,
-				categories: categoryStats.results,
+				positiveCategories: positiveCategoryStats.results,
+				negativeCategories: negativeCategoryStats.results,
 				trend: trendResult.results
 			}
 		}), {
@@ -427,55 +442,113 @@ async function analyzeSentiment(ai: Ai, text: string): Promise<{ label: string; 
 			}
 		}
 
-		// If confidence is borderline (40-60%), classify as neutral
-		if (score >= 0.4 && score <= 0.6) {
-			return { label: 'neutral', score: score };
-		}
-
-		// Return the final classification
+		// Return the final classification (only positive or negative)
 		if (label === 'positive') {
 			return { label: 'positive', score: score };
-		} else if (label === 'negative') {
-			return { label: 'negative', score: score };
 		} else {
-			return { label: 'neutral', score: score };
+			return { label: 'negative', score: score };
 		}
 
 	} catch (error) {
 		console.error('Error analyzing sentiment:', error);
-		// Fallback to neutral if AI fails
-		return { label: 'neutral', score: 0.5 };
+		// Fallback to negative if AI fails (safer to assume negative and investigate)
+		return { label: 'negative', score: 0.5 };
 	}
 }
 
 /**
- * Categorize feedback using Workers AI
+ * Categorize feedback using AI-powered classification
  */
 async function categorizeText(ai: Ai, text: string): Promise<string> {
 	try {
-		// Use a simpler keyword-based approach for categorization
-		// (Workers AI's text classification models are better for sentiment than multi-class categorization)
 		const lowerText = text.toLowerCase();
 
-		if (lowerText.includes('bug') || lowerText.includes('crash') || lowerText.includes('error') || lowerText.includes('broken')) {
-			return 'bug';
-		} else if (lowerText.includes('feature') || lowerText.includes('would be nice') || lowerText.includes('integration') || lowerText.includes('add')) {
-			return 'feature';
-		} else if (lowerText.includes('slow') || lowerText.includes('lag') || lowerText.includes('performance') || lowerText.includes('fast')) {
-			return 'performance';
-		} else if (lowerText.includes('design') || lowerText.includes('ui') || lowerText.includes('ux') || lowerText.includes('interface') || lowerText.includes('navigation')) {
-			return 'ui';
-		} else if (lowerText.includes('support') || lowerText.includes('help') || lowerText.includes('service')) {
-			return 'support';
-		} else if (lowerText.includes('price') || lowerText.includes('pricing') || lowerText.includes('cost') || lowerText.includes('expensive')) {
-			return 'pricing';
-		} else {
-			return 'general';
+		// Quick keyword-based pre-screening for obvious cases
+		const strongIndicators = {
+			bug: ['crash', 'error', 'broken', 'freeze', 'not working', 'doesn\'t work', 'fails', 'failed', 'glitch', 'unresponsive'],
+			pricing: ['price', 'pricing', 'cost', 'expensive', 'subscription', 'payment', 'plan', 'upgrade', 'value', 'worth']
+		};
+
+		// Check for strong indicators first
+		for (const [category, keywords] of Object.entries(strongIndicators)) {
+			for (const keyword of keywords) {
+				const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+				if (regex.test(lowerText)) {
+					return category;
+				}
+			}
 		}
+
+		// Use AI for more nuanced categorization
+		const prompt = `Analyze this user feedback and categorize it into ONE of these categories:
+
+Categories:
+- bug: Technical problems, crashes, errors, things not working properly
+- feature: Feature requests, suggestions for new functionality, requests to add something
+- performance: Speed issues, loading times, lag, optimization concerns
+- ui: User interface/UX problems, design issues, navigation problems, confusing layout
+- support: Questions about how to use something, requests for help, documentation issues
+
+Feedback: "${text}"
+
+Respond with ONLY the category name (bug, feature, performance, ui, or support). No explanation.`;
+
+		const response = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
+			messages: [
+				{ role: 'user', content: prompt }
+			],
+			max_tokens: 10,
+			temperature: 0.1
+		}) as { response: string };
+
+		const category = response.response.toLowerCase().trim();
+
+		// Validate the response is one of our categories
+		const validCategories = ['bug', 'feature', 'performance', 'ui', 'support', 'pricing'];
+		if (validCategories.includes(category)) {
+			return category;
+		}
+
+		// Fallback: Use keyword scoring if AI returns invalid category
+		const categories = {
+			bug: ['bug', 'issue', 'problem', 'wrong', 'incorrect'],
+			feature: ['add', 'wish', 'would be', 'need', 'want', 'should', 'could', 'missing'],
+			performance: ['slow', 'lag', 'fast', 'loading', 'speed', 'wait', 'delay'],
+			ui: ['design', 'interface', 'layout', 'look', 'confusing', 'find', 'menu', 'button'],
+			support: ['help', 'how', 'documentation', 'guide', 'tutorial', 'explain'],
+			pricing: ['price', 'cost', 'expensive', 'payment', 'plan']
+		};
+
+		let maxScore = 0;
+		let bestCategory = 'feature';
+
+		for (const [cat, keywords] of Object.entries(categories)) {
+			let score = 0;
+			for (const keyword of keywords) {
+				if (lowerText.includes(keyword)) {
+					score += 1;
+				}
+			}
+			if (score > maxScore) {
+				maxScore = score;
+				bestCategory = cat;
+			}
+		}
+
+		return bestCategory;
 
 	} catch (error) {
 		console.error('Error categorizing text:', error);
-		return 'general';
+		// Intelligent fallback based on text analysis
+		const lowerText = text.toLowerCase();
+		if (lowerText.includes('crash') || lowerText.includes('error') || lowerText.includes('broken')) {
+			return 'bug';
+		} else if (lowerText.includes('slow') || lowerText.includes('lag')) {
+			return 'performance';
+		} else if (lowerText.includes('price') || lowerText.includes('cost')) {
+			return 'pricing';
+		}
+		return 'feature';
 	}
 }
 
@@ -628,6 +701,70 @@ async function handleGetInsights(
 		console.error('Error getting insights:', error);
 		return new Response(JSON.stringify({
 			error: 'Failed to generate insights',
+			message: error instanceof Error ? error.message : 'Unknown error'
+		}), {
+			status: 500,
+			headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+		});
+	}
+}
+
+/**
+ * Migrate all "general" category feedback to specific categories
+ */
+async function handleMigrateCategories(
+	env: Env,
+	corsHeaders: Record<string, string>
+): Promise<Response> {
+	try {
+		// Get all feedback with "general" category
+		const generalFeedback = await env.DB.prepare(
+			`SELECT id, text FROM feedback WHERE category = 'general'`
+		).all();
+
+		if (!generalFeedback.results || generalFeedback.results.length === 0) {
+			return new Response(JSON.stringify({
+				success: true,
+				message: 'No general feedback found to migrate',
+				migrated: 0
+			}), {
+				headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+			});
+		}
+
+		let migratedCount = 0;
+		const categoryBreakdown: Record<string, number> = {};
+
+		// Re-categorize each general feedback
+		for (const item of generalFeedback.results) {
+			const feedback = item as any;
+			try {
+				const newCategory = await categorizeText(env.AI, feedback.text);
+
+				await env.DB.prepare(
+					`UPDATE feedback SET category = ? WHERE id = ?`
+				).bind(newCategory, feedback.id).run();
+
+				migratedCount++;
+				categoryBreakdown[newCategory] = (categoryBreakdown[newCategory] || 0) + 1;
+			} catch (error) {
+				console.error(`Error re-categorizing feedback ${feedback.id}:`, error);
+			}
+		}
+
+		return new Response(JSON.stringify({
+			success: true,
+			message: `Successfully migrated ${migratedCount} feedback entries`,
+			migrated: migratedCount,
+			categoryBreakdown
+		}), {
+			headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+		});
+
+	} catch (error) {
+		console.error('Error migrating categories:', error);
+		return new Response(JSON.stringify({
+			error: 'Failed to migrate categories',
 			message: error instanceof Error ? error.message : 'Unknown error'
 		}), {
 			status: 500,

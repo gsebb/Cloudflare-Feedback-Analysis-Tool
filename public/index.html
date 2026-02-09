@@ -40,14 +40,6 @@
                     <div class="stat-percentage" id="negative-percent">0%</div>
                 </div>
             </div>
-            <div class="stat-card neutral">
-                <div class="stat-icon">😐</div>
-                <div class="stat-content">
-                    <div class="stat-label">Neutral</div>
-                    <div class="stat-value" id="neutral-count">0</div>
-                    <div class="stat-percentage" id="neutral-percent">0%</div>
-                </div>
-            </div>
         </div>
 
         <!-- Charts Section -->
@@ -57,8 +49,12 @@
                 <canvas id="sentimentChart"></canvas>
             </div>
             <div class="chart-card">
-                <h3>Top Categories</h3>
-                <canvas id="categoryChart"></canvas>
+                <h3>Positive Feedback Categories</h3>
+                <canvas id="positiveCategoryChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Negative Feedback Categories</h3>
+                <canvas id="negativeCategoryChart"></canvas>
             </div>
         </div>
 
@@ -95,7 +91,6 @@
                 <option value="">All Sentiments</option>
                 <option value="positive">Positive</option>
                 <option value="negative">Negative</option>
-                <option value="neutral">Neutral</option>
             </select>
             <select id="category-filter" onchange="applyFilters()">
                 <option value="">All Categories</option>
@@ -105,7 +100,6 @@
                 <option value="performance">Performance</option>
                 <option value="support">Support</option>
                 <option value="pricing">Pricing</option>
-                <option value="general">General</option>
             </select>
         </div>
 
@@ -190,7 +184,6 @@
                             <select id="clear-sentiment" style="margin-left: 0.5rem;">
                                 <option value="positive">Positive</option>
                                 <option value="negative">Negative</option>
-                                <option value="neutral">Neutral</option>
                             </select>
                         </label>
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
@@ -203,7 +196,6 @@
                                 <option value="performance">Performance</option>
                                 <option value="support">Support</option>
                                 <option value="pricing">Pricing</option>
-                                <option value="general">General</option>
                             </select>
                         </label>
                     </div>
