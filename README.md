@@ -4,7 +4,7 @@ A serverless feedback aggregation tool built with Cloudflare Workers, featuring 
 
 ## Features
 
-- 🤖 **AI Sentiment Analysis** - Automatically detect positive/negative/neutral sentiment using Workers AI
+- 🤖 **AI Sentiment Analysis** - Automatically detect positive and negative sentiment using Workers AI
 - 🏷️ **Smart Categorization** - Auto-categorize feedback into bug reports, feature requests, UI issues, etc.
 - 📊 **Analytics Dashboard** - Visualize feedback trends and statistics
 - 💾 **Persistent Storage** - Store feedback in Cloudflare D1 SQL database
